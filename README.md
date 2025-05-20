@@ -80,7 +80,7 @@ quiz-platform/
 - npm, yarn, or pnpm
 - Supabase account
 
-### Setup
+<!-- ### Setup
 
 1. Clone the repository:
 
@@ -174,4 +174,4 @@ Don't forget to star ⭐ this repository if you found it helpful!
 
 ```
 
-```
+``` -->
