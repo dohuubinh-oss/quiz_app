@@ -2,7 +2,7 @@
 
 Welcome to the Next.js Quiz Platform! This interactive application allows users to create, manage, and share quizzes with customizable questions and answers.
 
-![Quiz Platform Banner](https://res.cloudinary.com/df4jaqtep/image/upload/v1747761197/r2ubf8azeanzlkvbshwz.png)
+![Quiz Platform Banner](https://res.cloudinary.com/df4jaqtep/image/upload/v1749914116/h4kx9cxcfps295ntwfrj.png)
 
 ## 🔍 Overview
 
