@@ -86,7 +86,7 @@ const QuizCard: React.FC<QuizCardProps> = ({ quiz }) => {
             </div>
           </div>
         }
-        bodyStyle={{ padding: 0 }}
+        styles={{ body: { padding: 0 } }}
       >
         <div className="p-6 flex flex-col h-full">
           <div className="flex-grow">

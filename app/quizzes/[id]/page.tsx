@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import {
   Typography,
   Button,
@@ -10,10 +10,10 @@ import {
   Form,
   Card,
   Modal,
-  message,
   Upload,
   Tooltip,
-} from "antd";
+  App,
+} from 'antd';
 import {
   PlusOutlined,
   EyeOutlined,
@@ -23,37 +23,38 @@ import {
   LinkOutlined,
   DeleteOutlined,
   ExclamationCircleOutlined,
-} from "@ant-design/icons";
-import { useQuiz } from "@/api/hooks/useQuiz";
-import { useQuizQuestions } from "@/api/hooks/useQuestions";
+} from '@ant-design/icons';
+import { useQuiz } from '@/api/hooks/useQuiz';
+import { useQuizQuestions } from '@/api/hooks/useQuestions';
 import {
   useUpdateQuiz,
   useTogglePublishQuiz,
   useDeleteQuiz,
-} from "@/api/hooks/useQuizzes";
+} from '@/api/hooks/useQuizzes';
 import {
   useCreateQuestion,
   useUpdateQuestion,
   useDeleteQuestion,
   useReorderQuestions,
-} from "@/api/hooks/useQuestions";
-import QuestionForm from "@/components/quiz/QuestionForm";
-import SortableQuestionList from "@/components/quiz/SortableQuestionList";
-import type { Question } from "@/lib/types";
-import { useAuth } from "@/lib/auth";
-import { uploadCoverImage } from "@/lib/storage";
-import Image from "next/image";
-import { CopyToClipboard } from "react-copy-to-clipboard";
+} from '@/api/hooks/useQuestions';
+import QuestionForm from '@/components/quiz/QuestionForm';
+import SortableQuestionList from '@/components/quiz/SortableQuestionList';
+import type { Question } from '@/lib/types';
+import { useAuth } from '@/lib/auth';
+import { uploadCoverImage } from '@/lib/storage';
+import Image from 'next/image';
+import { CopyToClipboard } from 'react-copy-to-clipboard';
 
 const { Title, Paragraph } = Typography;
 const { TextArea } = Input;
 const { Dragger } = Upload;
 
-export default function EditQuizPage() {
+function EditQuizPage() {
   const params = useParams();
   const router = useRouter();
   const quizId = params.id as string;
   const { user } = useAuth();
+  const { message } = App.useApp();
 
   const { data: quiz, isLoading: isLoadingQuiz } = useQuiz(quizId);
   const { data: questions = [], isLoading: isLoadingQuestions } =
@@ -74,7 +75,7 @@ export default function EditQuizPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [shareUrl, setShareUrl] = useState("");
+  const [shareUrl, setShareUrl] = useState('');
 
   // Modal states
   const [deleteQuestionModalVisible, setDeleteQuestionModalVisible] =
@@ -99,9 +100,9 @@ export default function EditQuizPage() {
   useEffect(() => {
     if (quiz && user && quiz.author_id !== user.id) {
       message.error("You don't have permission to edit this quiz");
-      router.push("/quizzes");
+      router.push('/quizzes');
     }
-  }, [quiz, user, router]);
+  }, [quiz, user, router, message]);
 
   const handleUpdateQuiz = async (values: any) => {
     try {
@@ -114,7 +115,7 @@ export default function EditQuizPage() {
         if (newCoverImageUrl) {
           coverImageUrl = newCoverImageUrl;
         } else {
-          message.error("Failed to upload cover image");
+          message.error('Failed to upload cover image');
           setUploading(false);
           return;
         }
@@ -128,17 +129,17 @@ export default function EditQuizPage() {
         },
       });
 
-      message.success("Quiz updated successfully");
+      message.success('Quiz updated successfully');
       setUploading(false);
     } catch (error) {
-      message.error("Failed to update quiz");
+      message.error('Failed to update quiz');
       setUploading(false);
     }
   };
 
   const handleTogglePublish = async () => {
     if (!quiz?.published && questions.length === 0) {
-      message.error("Cannot publish a quiz with no questions");
+      message.error('Cannot publish a quiz with no questions');
       return;
     }
 
@@ -150,8 +151,8 @@ export default function EditQuizPage() {
 
       message.success(
         quiz?.published
-          ? "Quiz unpublished successfully"
-          : "Quiz published successfully"
+          ? 'Quiz unpublished successfully'
+          : 'Quiz published successfully'
       );
 
       if (!quiz?.published) {
@@ -160,7 +161,7 @@ export default function EditQuizPage() {
       }
     } catch (error) {
       message.error(
-        quiz?.published ? "Failed to unpublish quiz" : "Failed to publish quiz"
+        quiz?.published ? 'Failed to unpublish quiz' : 'Failed to publish quiz'
       );
     }
   };
@@ -185,11 +186,11 @@ export default function EditQuizPage() {
 
     try {
       await deleteQuestionMutation.mutateAsync(questionToDelete);
-      message.success("Question deleted successfully");
+      message.success('Question deleted successfully');
       setDeleteQuestionModalVisible(false);
       setQuestionToDelete(null);
     } catch (error) {
-      message.error("Failed to delete question");
+      message.error('Failed to delete question');
     }
   };
 
@@ -205,18 +206,18 @@ export default function EditQuizPage() {
           id: editingQuestion.id,
           updates: data,
         });
-        message.success("Question updated successfully");
+        message.success('Question updated successfully');
       } else {
         await createQuestionMutation.mutateAsync({
           ...data,
           quiz_id: quizId,
           order: questions.length + 1,
         });
-        message.success("Question added successfully");
+        message.success('Question added successfully');
       }
       setShowQuestionForm(false);
     } catch (error) {
-      message.error("Failed to save question");
+      message.error('Failed to save question');
     }
   };
 
@@ -225,9 +226,9 @@ export default function EditQuizPage() {
       await reorderQuestionsMutation.mutateAsync(
         reorderedQuestions.map((q) => q.id)
       );
-      message.success("Questions reordered successfully");
+      message.success('Questions reordered successfully');
     } catch (error) {
-      message.error("Failed to reorder questions");
+      message.error('Failed to reorder questions');
     }
   };
 
@@ -245,23 +246,23 @@ export default function EditQuizPage() {
   };
 
   const uploadProps = {
-    name: "file",
+    name: 'file',
     multiple: false,
-    accept: "image/*",
+    accept: 'image/*',
     beforeUpload: (file: File) => {
-      const isImage = file.type.startsWith("image/");
+      const isImage = file.type.startsWith('image/');
       if (!isImage) {
-        message.error("You can only upload image files!");
+        message.error('You can only upload image files!');
       }
       const isLt2M = file.size / 1024 / 1024 < 2;
       if (!isLt2M) {
-        message.error("Image must be smaller than 2MB!");
+        message.error('Image must be smaller than 2MB!');
       }
       return isImage && isLt2M ? false : Upload.LIST_IGNORE;
     },
     customRequest: ({ onSuccess }: any) => {
       setTimeout(() => {
-        onSuccess("ok", null);
+        onSuccess('ok', null);
       }, 0);
     },
   };
@@ -273,11 +274,11 @@ export default function EditQuizPage() {
   const handleDeleteQuizConfirm = async () => {
     try {
       await deleteQuizMutation.mutateAsync(quizId);
-      message.success("Quiz deleted successfully");
+      message.success('Quiz deleted successfully');
       setDeleteQuizModalVisible(false);
-      router.push("/quizzes");
+      router.push('/quizzes');
     } catch (error) {
-      message.error("Failed to delete quiz");
+      message.error('Failed to delete quiz');
     }
   };
 
@@ -302,7 +303,7 @@ export default function EditQuizPage() {
         <Paragraph>
           The quiz you're looking for doesn't exist or has been removed.
         </Paragraph>
-        <Button type="primary" onClick={() => router.push("/quizzes")}>
+        <Button type="primary" onClick={() => router.push('/quizzes')}>
           Back to Quizzes
         </Button>
       </div>
@@ -335,7 +336,7 @@ export default function EditQuizPage() {
                   </span>
                   <CopyToClipboard
                     text={shareUrl}
-                    onCopy={() => message.success("Link copied to clipboard!")}
+                    onCopy={() => message.success('Link copied to clipboard!')}
                   >
                     <Tooltip title="Copy link">
                       <Button
@@ -353,18 +354,18 @@ export default function EditQuizPage() {
                 onClick={() =>
                   router.push(
                     `/quizzes/${quizId}/${
-                      quiz.published ? "published" : "preview"
+                      quiz.published ? 'published' : 'preview'
                     }`
                   )
                 }
                 className="bg-gray-50 border-gray-200 hover:bg-gray-100 transition-all duration-200"
                 size="large"
               >
-                {quiz.published ? "View Live" : "Preview"}
+                {quiz.published ? 'View Live' : 'Preview'}
               </Button>
 
               <Button
-                type={quiz.published ? "default" : "primary"}
+                type={quiz.published ? 'default' : 'primary'}
                 icon={quiz.published ? <StopOutlined /> : <CheckOutlined />}
                 danger={quiz.published}
                 onClick={handleTogglePublish}
@@ -372,11 +373,11 @@ export default function EditQuizPage() {
                 size="large"
                 className={`transition-all duration-200 ${
                   quiz.published
-                    ? "hover:shadow-lg"
-                    : "bg-gradient-to-r from-blue-500 to-purple-600 border-0 hover:shadow-lg hover:scale-105"
+                    ? 'hover:shadow-lg'
+                    : 'bg-gradient-to-r from-blue-500 to-purple-600 border-0 hover:shadow-lg hover:scale-105'
                 }`}
               >
-                {quiz.published ? "Unpublish" : "Publish Quiz"}
+                {quiz.published ? 'Unpublish' : 'Publish Quiz'}
               </Button>
               <Button
                 danger
@@ -421,7 +422,7 @@ export default function EditQuizPage() {
                     }
                     name="title"
                     rules={[
-                      { required: true, message: "Please enter a title" },
+                      { required: true, message: 'Please enter a title' },
                     ]}
                   >
                     <Input
@@ -438,7 +439,7 @@ export default function EditQuizPage() {
                     }
                     name="description"
                     rules={[
-                      { required: true, message: "Please enter a description" },
+                      { required: true, message: 'Please enter a description' },
                     ]}
                   >
                     <TextArea
@@ -464,7 +465,7 @@ export default function EditQuizPage() {
                           onClick={() => setPreviewVisible(true)}
                         >
                           <Image
-                            src={previewImage || "/placeholder.svg"}
+                            src={previewImage || '/placeholder.svg'}
                             alt="Cover preview"
                             fill
                             className="object-cover group-hover:scale-105 transition-transform duration-300"
@@ -575,8 +576,8 @@ export default function EditQuizPage() {
           {previewImage && (
             <img
               alt="Cover preview"
-              style={{ width: "100%" }}
-              src={previewImage || "/placeholder.svg"}
+              style={{ width: '100%' }}
+              src={previewImage || '/placeholder.svg'}
               className="rounded-lg"
             />
           )}
@@ -627,5 +628,13 @@ export default function EditQuizPage() {
         </Modal>
       </div>
     </div>
+  );
+}
+
+export default function EditQuizPageWrapper() {
+  return (
+    <App>
+      <EditQuizPage />
+    </App>
   );
 }

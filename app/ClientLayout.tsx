@@ -3,13 +3,12 @@
 import type React from "react";
 import "./globals.css";
 import { Inter } from "next/font/google";
-import { ConfigProvider, Layout, Button, Dropdown, Avatar, Badge } from "antd";
+import { ConfigProvider, Layout, Button, Dropdown, Avatar, App } from "antd";
 import {
   BookOutlined,
   PlusOutlined,
   UserOutlined,
   LogoutOutlined,
-  BellOutlined,
 } from "@ant-design/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -53,23 +52,6 @@ function AppHeader() {
               </p>
             </div>
           </Link>
-
-          {/* Navigation Links */}
-          {/* <nav className="hidden md:flex items-center space-x-1">
-            <Link href="/quizzes">
-              <Button
-                type={pathname === "/quizzes" ? "primary" : "text"}
-                icon={<BookOutlined />}
-                className={`h-10 px-6 rounded-xl font-medium transition-all duration-300 ${
-                  pathname === "/quizzes"
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 border-0 shadow-md"
-                    : "hover:bg-blue-50 hover:text-blue-600"
-                }`}
-              >
-                My Quizzes
-              </Button>
-            </Link>
-          </nav> */}
         </div>
 
         {/* Right Side Actions */}
@@ -86,15 +68,6 @@ function AppHeader() {
                   <span className="hidden sm:inline ml-1">Create Quiz</span>
                 </Button>
               </Link>
-
-              {/* Notifications */}
-              {/* <Button
-                type="text"
-                icon={<BellOutlined />}
-                className="w-10 h-10 rounded-xl hover:bg-gray-100 transition-all duration-300"
-              >
-                <Badge count={0} size="small" />
-              </Button> */}
 
               {/* User Menu */}
               <Dropdown
@@ -143,22 +116,24 @@ export default function ClientLayout({
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider theme={theme}>
-        <AuthGuard>
-          <Layout className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
-            <AppHeader />
-            <Content className="pt-16">
-              <div className="min-h-[calc(100vh-64px)]">{children}</div>
-            </Content>
-            <Footer className="text-center bg-white/50 backdrop-blur-sm border-t border-gray-200/50 py-6">
-              <div className="max-w-7xl mx-auto px-4">
-                <p className="text-gray-600">
-                  QuizMaster ©{new Date().getFullYear()} - Create, Share, and
-                  Learn with Interactive Quizzes
-                </p>
-              </div>
-            </Footer>
-          </Layout>
-        </AuthGuard>
+        <App>
+          <AuthGuard>
+            <Layout className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
+              <AppHeader />
+              <Content className="pt-16">
+                <div className="min-h-[calc(100vh-64px)]">{children}</div>
+              </Content>
+              <Footer className="text-center bg-white/50 backdrop-blur-sm border-t border-gray-200/50 py-6">
+                <div className="max-w-7xl mx-auto px-4">
+                  <p className="text-gray-600">
+                    QuizMaster ©{new Date().getFullYear()} - Create, Share, and
+                    Learn with Interactive Quizzes
+                  </p>
+                </div>
+              </Footer>
+            </Layout>
+          </AuthGuard>
+        </App>
       </ConfigProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
