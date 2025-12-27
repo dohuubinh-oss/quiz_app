@@ -25,7 +25,6 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { useQuiz } from '@/api/hooks/useQuiz';
-import { useQuizQuestions } from '@/api/hooks/useQuestions';
 import {
   useUpdateQuiz,
   useTogglePublishQuiz,
@@ -39,15 +38,29 @@ import {
 } from '@/api/hooks/useQuestions';
 import QuestionForm from '@/components/quiz/QuestionForm';
 import SortableQuestionList from '@/components/quiz/SortableQuestionList';
-import type { Question } from '@/lib/types';
+import type { IQuestion } from '@/models/Quiz';
 import { useAuth } from '@/lib/auth';
-import { uploadCoverImage } from '@/lib/storage';
 import Image from 'next/image';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
+import axios from 'axios';
 
 const { Title, Paragraph } = Typography;
 const { TextArea } = Input;
 const { Dragger } = Upload;
+
+const uploadImage = async (file: File): Promise<string | null> => {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await axios.post("/api/upload", formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.imageUrl;
+  } catch (error) {
+    console.error("Image upload failed", error);
+    return null;
+  }
+};
 
 function EditQuizPage() {
   const params = useParams();
@@ -57,48 +70,44 @@ function EditQuizPage() {
   const { message } = App.useApp();
 
   const { data: quiz, isLoading: isLoadingQuiz } = useQuiz(quizId);
-  const { data: questions = [], isLoading: isLoadingQuestions } =
-    useQuizQuestions(quizId);
 
   const updateQuizMutation = useUpdateQuiz();
   const togglePublishMutation = useTogglePublishQuiz();
   const deleteQuizMutation = useDeleteQuiz();
-  const createQuestionMutation = useCreateQuestion();
-  const updateQuestionMutation = useUpdateQuestion();
+
+  const createQuestionMutation = useCreateQuestion(quizId);
+  const updateQuestionMutation = useUpdateQuestion(quizId);
   const deleteQuestionMutation = useDeleteQuestion(quizId);
   const reorderQuestionsMutation = useReorderQuestions(quizId);
 
   const [showQuestionForm, setShowQuestionForm] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [editingQuestion, setEditingQuestion] = useState<IQuestion | null>(null);
   const [form] = Form.useForm();
-  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [newCoverImageFile, setNewCoverImageFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
 
-  // Modal states
   const [deleteQuestionModalVisible, setDeleteQuestionModalVisible] =
     useState(false);
   const [deleteQuizModalVisible, setDeleteQuizModalVisible] = useState(false);
   const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
 
-  // Set initial preview image from quiz data
   useEffect(() => {
-    if (quiz?.cover_image) {
-      setPreviewImage(quiz.cover_image);
+    if (quiz?.coverImage) {
+      setPreviewImage(quiz.coverImage);
     }
-
-    // Set share URL
     if (quiz) {
       const baseUrl = window.location.origin;
       setShareUrl(`${baseUrl}/quizzes/${quizId}/published`);
+      // Vẫn có thể dùng setFieldsValue để đồng bộ nếu có thay đổi từ bên ngoài
+      form.setFieldsValue({ title: quiz.title, description: quiz.description });
     }
-  }, [quiz, quizId]);
+  }, [quiz, quizId, form]);
 
-  // Check if user is the owner of the quiz
   useEffect(() => {
-    if (quiz && user && quiz.author_id !== user.id) {
+    if (quiz && user && quiz.authorId.toString() !== user.id) {
       message.error("You don't have permission to edit this quiz");
       router.push('/quizzes');
     }
@@ -106,17 +115,16 @@ function EditQuizPage() {
 
   const handleUpdateQuiz = async (values: any) => {
     try {
-      setUploading(true);
-      let coverImageUrl = quiz?.cover_image || null;
+      setSubmitting(true);
+      let coverImageUrl = quiz?.coverImage || null;
 
-      // Upload cover image if a new one was selected
-      if (coverImage && user) {
-        const newCoverImageUrl = await uploadCoverImage(coverImage, user.id);
-        if (newCoverImageUrl) {
-          coverImageUrl = newCoverImageUrl;
+      if (newCoverImageFile) {
+        const newUrl = await uploadImage(newCoverImageFile);
+        if (newUrl) {
+          coverImageUrl = newUrl;
         } else {
-          message.error('Failed to upload cover image');
-          setUploading(false);
+          message.error('Failed to upload new cover image');
+          setSubmitting(false);
           return;
         }
       }
@@ -125,20 +133,22 @@ function EditQuizPage() {
         id: quizId,
         updates: {
           ...values,
-          cover_image: coverImageUrl,
+          coverImage: coverImageUrl,
         },
       });
 
       message.success('Quiz updated successfully');
-      setUploading(false);
+      setNewCoverImageFile(null);
     } catch (error) {
       message.error('Failed to update quiz');
-      setUploading(false);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleTogglePublish = async () => {
-    if (!quiz?.published && questions.length === 0) {
+    const currentQuestions = quiz?.questions || [];
+    if (!quiz?.isPublished && currentQuestions.length === 0) {
       message.error('Cannot publish a quiz with no questions');
       return;
     }
@@ -146,125 +156,41 @@ function EditQuizPage() {
     try {
       await togglePublishMutation.mutateAsync({
         id: quizId,
-        publish: !quiz?.published,
+        isPublished: !quiz?.isPublished,
       });
 
       message.success(
-        quiz?.published
+        quiz?.isPublished
           ? 'Quiz unpublished successfully'
           : 'Quiz published successfully'
       );
 
-      if (!quiz?.published) {
-        // If we just published the quiz, redirect to the published view
+      if (!quiz?.isPublished) {
         router.push(`/quizzes/${quizId}/published`);
       }
     } catch (error) {
       message.error(
-        quiz?.published ? 'Failed to unpublish quiz' : 'Failed to publish quiz'
+        quiz?.isPublished ? 'Failed to unpublish quiz' : 'Failed to publish quiz'
       );
-    }
-  };
-
-  const handleAddQuestion = () => {
-    setEditingQuestion(null);
-    setShowQuestionForm(true);
-  };
-
-  const handleEditQuestion = (question: Question) => {
-    setEditingQuestion(question);
-    setShowQuestionForm(true);
-  };
-
-  const handleDeleteQuestionClick = (questionId: string) => {
-    setQuestionToDelete(questionId);
-    setDeleteQuestionModalVisible(true);
-  };
-
-  const handleDeleteQuestionConfirm = async () => {
-    if (!questionToDelete) return;
-
-    try {
-      await deleteQuestionMutation.mutateAsync(questionToDelete);
-      message.success('Question deleted successfully');
-      setDeleteQuestionModalVisible(false);
-      setQuestionToDelete(null);
-    } catch (error) {
-      message.error('Failed to delete question');
-    }
-  };
-
-  const handleDeleteQuestionCancel = () => {
-    setDeleteQuestionModalVisible(false);
-    setQuestionToDelete(null);
-  };
-
-  const handleQuestionSubmit = async (data: any) => {
-    try {
-      if (editingQuestion) {
-        await updateQuestionMutation.mutateAsync({
-          id: editingQuestion.id,
-          updates: data,
-        });
-        message.success('Question updated successfully');
-      } else {
-        await createQuestionMutation.mutateAsync({
-          ...data,
-          quiz_id: quizId,
-          order: questions.length + 1,
-        });
-        message.success('Question added successfully');
-      }
-      setShowQuestionForm(false);
-    } catch (error) {
-      message.error('Failed to save question');
-    }
-  };
-
-  const handleReorderQuestions = async (reorderedQuestions: Question[]) => {
-    try {
-      await reorderQuestionsMutation.mutateAsync(
-        reorderedQuestions.map((q) => q.id)
-      );
-      message.success('Questions reordered successfully');
-    } catch (error) {
-      message.error('Failed to reorder questions');
     }
   };
 
   const handleImageChange = (info: any) => {
-    console.log(info);
-    // We're not actually uploading here, just storing the file
-    setCoverImage(info.file);
+    const file = info.file.originFileObj || info.file;
+    setNewCoverImageFile(file);
 
-    // Create a preview URL
     const reader = new FileReader();
-    reader.onload = () => {
-      setPreviewImage(reader.result as string);
-    };
-    reader.readAsDataURL(info.file);
+    reader.onload = () => setPreviewImage(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   const uploadProps = {
     name: 'file',
     multiple: false,
     accept: 'image/*',
-    beforeUpload: (file: File) => {
-      const isImage = file.type.startsWith('image/');
-      if (!isImage) {
-        message.error('You can only upload image files!');
-      }
-      const isLt2M = file.size / 1024 / 1024 < 2;
-      if (!isLt2M) {
-        message.error('Image must be smaller than 2MB!');
-      }
-      return isImage && isLt2M ? false : Upload.LIST_IGNORE;
-    },
-    customRequest: ({ onSuccess }: any) => {
-      setTimeout(() => {
-        onSuccess('ok', null);
-      }, 0);
-    },
+    showUploadList: false,
+    beforeUpload: () => false,
+    onChange: handleImageChange,
   };
 
   const handleDeleteQuizClick = () => {
@@ -286,7 +212,68 @@ function EditQuizPage() {
     setDeleteQuizModalVisible(false);
   };
 
-  if (isLoadingQuiz || isLoadingQuestions) {
+  const handleAddQuestion = () => {
+    setEditingQuestion(null);
+    setShowQuestionForm(true);
+  };
+
+  const handleEditQuestion = (question: IQuestion) => {
+    setEditingQuestion(question);
+    setShowQuestionForm(true);
+  };
+
+  const handleDeleteQuestionClick = (questionId: string) => {
+    setQuestionToDelete(questionId);
+    setDeleteQuestionModalVisible(true);
+  };
+
+  const handleDeleteQuestionConfirm = async () => {
+    if (!questionToDelete) return;
+    try {
+      await deleteQuestionMutation.mutateAsync(questionToDelete);
+      message.success('Question deleted successfully');
+    } catch (error) {
+      message.error('Failed to delete question');
+    } finally {
+      setDeleteQuestionModalVisible(false);
+      setQuestionToDelete(null);
+    }
+  };
+
+  const handleDeleteQuestionCancel = () => {
+    setDeleteQuestionModalVisible(false);
+    setQuestionToDelete(null);
+  };
+
+  const handleQuestionSubmit = async (data: any) => {
+    try {
+      if (editingQuestion) {
+        await updateQuestionMutation.mutateAsync({
+          questionId: editingQuestion._id.toString(),
+          updates: data,
+        });
+        message.success('Question updated successfully');
+      } else {
+        await createQuestionMutation.mutateAsync(data);
+        message.success('Question added successfully');
+      }
+      setShowQuestionForm(false);
+      setEditingQuestion(null);
+    } catch (error) {
+      message.error('Failed to save question');
+    }
+  };
+
+  const handleReorderQuestions = async (reorderedQuestions: IQuestion[]) => {
+    try {
+      const questionIds = reorderedQuestions.map((q) => q._id.toString());
+      await reorderQuestionsMutation.mutateAsync({ questionIds });
+    } catch (error) {
+      message.error('Failed to reorder questions');
+    }
+  };
+
+  if (isLoadingQuiz) {
     return (
       <div className="flex justify-center items-center h-64">
         <Spin size="large" />
@@ -310,10 +297,11 @@ function EditQuizPage() {
     );
   }
 
+  const questions = quiz.questions || [];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header Section */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
@@ -329,7 +317,7 @@ function EditQuizPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              {quiz.published && (
+              {quiz.isPublished && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
                   <span className="text-sm text-green-700 font-medium">
                     Share:
@@ -353,31 +341,29 @@ function EditQuizPage() {
                 icon={<EyeOutlined />}
                 onClick={() =>
                   router.push(
-                    `/quizzes/${quizId}/${
-                      quiz.published ? 'published' : 'preview'
-                    }`
+                    `/quizzes/${quizId}/${quiz.isPublished ? 'published' : 'preview'}`
                   )
                 }
                 className="bg-gray-50 border-gray-200 hover:bg-gray-100 transition-all duration-200"
                 size="large"
               >
-                {quiz.published ? 'View Live' : 'Preview'}
+                {quiz.isPublished ? 'View Live' : 'Preview'}
               </Button>
 
               <Button
-                type={quiz.published ? 'default' : 'primary'}
-                icon={quiz.published ? <StopOutlined /> : <CheckOutlined />}
-                danger={quiz.published}
+                type={quiz.isPublished ? 'default' : 'primary'}
+                icon={quiz.isPublished ? <StopOutlined /> : <CheckOutlined />}
+                danger={quiz.isPublished}
                 onClick={handleTogglePublish}
-                disabled={!quiz.published && questions.length === 0}
+                disabled={!quiz.isPublished && questions.length === 0}
                 size="large"
                 className={`transition-all duration-200 ${
-                  quiz.published
+                  quiz.isPublished
                     ? 'hover:shadow-lg'
                     : 'bg-gradient-to-r from-blue-500 to-purple-600 border-0 hover:shadow-lg hover:scale-105'
                 }`}
               >
-                {quiz.published ? 'Unpublish' : 'Publish Quiz'}
+                {quiz.isPublished ? 'Unpublish' : 'Publish Quiz'}
               </Button>
               <Button
                 danger
@@ -392,7 +378,6 @@ function EditQuizPage() {
           </div>
         </div>
 
-        {/* Quiz Details Card */}
         <Card className="mb-8 shadow-sm border-0 rounded-2xl overflow-hidden bg-white">
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 border-b border-gray-100">
             <Title level={3} className="mb-2 text-gray-800">
@@ -405,6 +390,7 @@ function EditQuizPage() {
 
           <div className="p-6">
             <Form
+              form={form}
               layout="vertical"
               initialValues={{
                 title: quiz.title,
@@ -415,15 +401,9 @@ function EditQuizPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="space-y-6">
                   <Form.Item
-                    label={
-                      <span className="text-gray-700 font-medium">
-                        Quiz Title
-                      </span>
-                    }
+                    label={<span className="text-gray-700 font-medium">Quiz Title</span>}
                     name="title"
-                    rules={[
-                      { required: true, message: 'Please enter a title' },
-                    ]}
+                    rules={[{ required: true, message: 'Please enter a title' }]}
                   >
                     <Input
                       placeholder="Enter an engaging quiz title"
@@ -432,15 +412,9 @@ function EditQuizPage() {
                   </Form.Item>
 
                   <Form.Item
-                    label={
-                      <span className="text-gray-700 font-medium">
-                        Description
-                      </span>
-                    }
+                    label={<span className="text-gray-700 font-medium">Description</span>}
                     name="description"
-                    rules={[
-                      { required: true, message: 'Please enter a description' },
-                    ]}
+                    rules={[{ required: true, message: 'Please enter a description' }]}
                   >
                     <TextArea
                       rows={4}
@@ -451,13 +425,7 @@ function EditQuizPage() {
                 </div>
 
                 <div>
-                  <Form.Item
-                    label={
-                      <span className="text-gray-700 font-medium">
-                        Cover Image
-                      </span>
-                    }
-                  >
+                  <Form.Item label={<span className="text-gray-700 font-medium">Cover Image</span>}>
                     {previewImage ? (
                       <div className="relative group">
                         <div
@@ -476,10 +444,7 @@ function EditQuizPage() {
                         </div>
                         <Button
                           icon={<PlusOutlined />}
-                          onClick={() => {
-                            setCoverImage(null);
-                            setPreviewImage(null);
-                          }}
+                          onClick={() => { setNewCoverImageFile(null); setPreviewImage(null); }}
                           className="mt-3 border-gray-300 hover:border-blue-400 transition-colors"
                         >
                           Change Image
@@ -488,18 +453,11 @@ function EditQuizPage() {
                     ) : (
                       <Dragger
                         {...uploadProps}
-                        onChange={handleImageChange}
                         className="rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors"
                       >
-                        <p className="ant-upload-drag-icon">
-                          <InboxOutlined className="text-4xl text-blue-500" />
-                        </p>
-                        <p className="ant-upload-text text-gray-700 font-medium">
-                          Click or drag file to upload
-                        </p>
-                        <p className="ant-upload-hint text-gray-500">
-                          Support for single image upload. Max size: 2MB
-                        </p>
+                        <p className="ant-upload-drag-icon"><InboxOutlined className="text-4xl text-blue-500" /></p>
+                        <p className="ant-upload-text text-gray-700 font-medium">Click or drag file to upload</p>
+                        <p className="ant-upload-hint text-gray-500">Support for single image upload. Max size: 2MB</p>
                       </Dragger>
                     )}
                   </Form.Item>
@@ -510,7 +468,7 @@ function EditQuizPage() {
                 <Button
                   type="primary"
                   htmlType="submit"
-                  loading={uploading}
+                  loading={submitting}
                   size="large"
                   className="bg-gradient-to-r from-blue-500 to-purple-600 border-0 hover:shadow-lg hover:scale-105 transition-all duration-200"
                 >
@@ -521,17 +479,12 @@ function EditQuizPage() {
           </div>
         </Card>
 
-        {/* Questions Section */}
         <Card className="shadow-sm border-0 rounded-2xl overflow-hidden bg-white">
           <div className="bg-gradient-to-r from-green-50 to-blue-50 p-6 border-b border-gray-100">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <Title level={3} className="mb-2 text-gray-800">
-                  Questions ({questions.length})
-                </Title>
-                <Paragraph className="text-gray-600 mb-0">
-                  Drag questions to reorder them
-                </Paragraph>
+                <Title level={3} className="mb-2 text-gray-800">Questions ({questions.length})</Title>
+                <Paragraph className="text-gray-600 mb-0">Drag questions to reorder them</Paragraph>
               </div>
               <Button
                 type="primary"
@@ -549,15 +502,15 @@ function EditQuizPage() {
             {showQuestionForm && (
               <div className="mb-8">
                 <QuestionForm
-                  initialData={editingQuestion || undefined}
+                  initialData={editingQuestion ? { ...editingQuestion, id: editingQuestion._id.toString() } : undefined}
                   onSubmit={handleQuestionSubmit}
-                  onCancel={() => setShowQuestionForm(false)}
+                  onCancel={() => { setShowQuestionForm(false); setEditingQuestion(null); }}
                 />
               </div>
             )}
 
             <SortableQuestionList
-              questions={questions}
+              questions={questions.map(q => ({ ...q, id: q._id.toString() }))}
               onEdit={handleEditQuestion}
               onDelete={handleDeleteQuestionClick}
               onReorder={handleReorderQuestions}
@@ -565,32 +518,12 @@ function EditQuizPage() {
           </div>
         </Card>
 
-        {/* Image Preview Modal */}
-        <Modal
-          open={previewVisible}
-          title="Cover Image Preview"
-          footer={null}
-          onCancel={() => setPreviewVisible(false)}
-          className="rounded-2xl overflow-hidden"
-        >
-          {previewImage && (
-            <img
-              alt="Cover preview"
-              style={{ width: '100%' }}
-              src={previewImage || '/placeholder.svg'}
-              className="rounded-lg"
-            />
-          )}
+        <Modal open={previewVisible} title="Cover Image Preview" footer={null} onCancel={() => setPreviewVisible(false)} className="rounded-2xl overflow-hidden">
+          {previewImage && <img alt="Cover preview" style={{ width: '100%' }} src={previewImage || '/placeholder.svg'} className="rounded-lg" />}
         </Modal>
 
-        {/* Delete Question Modal */}
         <Modal
-          title={
-            <div className="flex items-center gap-2">
-              <ExclamationCircleOutlined className="text-red-500" />
-              <span>Delete Question</span>
-            </div>
-          }
+          title={<div className="flex items-center gap-2"><ExclamationCircleOutlined className="text-red-500" /><span>Delete Question</span></div>}
           open={deleteQuestionModalVisible}
           onOk={handleDeleteQuestionConfirm}
           onCancel={handleDeleteQuestionCancel}
@@ -603,14 +536,8 @@ function EditQuizPage() {
           <p className="text-gray-500">This action cannot be undone.</p>
         </Modal>
 
-        {/* Delete Quiz Modal */}
         <Modal
-          title={
-            <div className="flex items-center gap-2">
-              <DeleteOutlined className="text-red-500" />
-              <span>Delete Quiz</span>
-            </div>
-          }
+          title={<div className="flex items-center gap-2"><DeleteOutlined className="text-red-500" /><span>Delete Quiz</span></div>}
           open={deleteQuizModalVisible}
           onOk={handleDeleteQuizConfirm}
           onCancel={handleDeleteQuizCancel}
@@ -619,12 +546,8 @@ function EditQuizPage() {
           okType="danger"
           confirmLoading={deleteQuizMutation.isPending}
         >
-          <p>
-            Are you sure you want to delete <strong>"{quiz?.title}"</strong>?
-          </p>
-          <p className="text-gray-500">
-            This action cannot be undone and will remove all questions.
-          </p>
+          <p>Are you sure you want to delete <strong>"{quiz?.title}"</strong>?</p>
+          <p className="text-gray-500">This action cannot be undone and will remove all questions.</p>
         </Modal>
       </div>
     </div>

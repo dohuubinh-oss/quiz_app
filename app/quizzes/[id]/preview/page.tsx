@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { Typography, Button, Spin, Space, App, Card } from 'antd';
 import { EditOutlined, CheckOutlined } from '@ant-design/icons';
 import { useQuiz } from '@/api/hooks/useQuiz';
-import { useQuizQuestions } from '@/api/hooks/useQuestions';
 import { useTogglePublishQuiz } from '@/api/hooks/useQuizzes';
 import QuizPreview from '@/components/quiz/QuizPreview';
 import { useAuth } from '@/lib/auth';
@@ -20,18 +19,20 @@ function PreviewQuizPage() {
   const { user } = useAuth();
   const { message } = App.useApp();
 
+  // THAY ĐỔI: Chỉ cần hook useQuiz. Đã xóa useQuizQuestions.
   const { data: quiz, isLoading: isLoadingQuiz } = useQuiz(quizId);
-  const { data: questions = [], isLoading: isLoadingQuestions } =
-    useQuizQuestions(quizId);
   const togglePublishMutation = useTogglePublishQuiz();
 
-  // Check if user is the owner of the quiz
+  // THAY ĐỔI: Kiểm tra quyền sở hữu với `authorId`
   useEffect(() => {
-    if (quiz && user && quiz.author_id !== user.id) {
+    if (quiz && user && quiz.authorId.toString() !== user.id) {
       message.error("You don't have permission to preview this quiz");
       router.push('/quizzes');
     }
   }, [quiz, user, router, message]);
+  
+  // THAY ĐỔI: Lấy câu hỏi trực tiếp từ quiz data
+  const questions = quiz?.questions || [];
 
   const handlePublish = async () => {
     if (questions.length === 0) {
@@ -39,15 +40,17 @@ function PreviewQuizPage() {
       return;
     }
 
+    // THAY ĐỔI: Sử dụng payload `isPublished`
     await togglePublishMutation.mutateAsync({
       id: quizId,
-      publish: true,
+      isPublished: true,
     });
     message.success('Quiz published successfully');
     router.push(`/quizzes/${quizId}/published`);
   };
 
-  if (isLoadingQuiz || isLoadingQuestions) {
+  // THAY ĐỔI: Chỉ cần isLoadingQuiz
+  if (isLoadingQuiz) {
     return (
       <div className="flex justify-center items-center h-64">
         <Spin size="large" />
@@ -93,11 +96,12 @@ function PreviewQuizPage() {
         </Space>
       </div>
 
-      {quiz.cover_image && (
+      {/* THAY ĐỔI: Sử dụng `coverImage` */}
+      {quiz.coverImage && (
         <Card className="mb-6 overflow-hidden shadow-sm">
           <div className="relative h-48 w-full">
             <Image
-              src={quiz.cover_image || '/placeholder.svg'}
+              src={quiz.coverImage || '/placeholder.svg'}
               alt={quiz.title}
               fill
               className="object-cover rounded-md"
@@ -110,6 +114,7 @@ function PreviewQuizPage() {
         </Card>
       )}
 
+      {/* THAY ĐỔI: Truyền `questions` từ `quiz` */}
       <QuizPreview quiz={quiz} questions={questions} readOnly={true} />
     </div>
   );

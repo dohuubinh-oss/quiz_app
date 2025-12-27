@@ -2,9 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
+import path from 'path';
+import fs from 'fs/promises';
 
-// This is a mock upload endpoint. In a real application, you would
-// use a library like `multer` to handle the file and upload it to a cloud storage service.
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
 
@@ -12,14 +12,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
-  // In a real implementation:
-  // 1. You'd receive form data, not JSON.
-  // 2. You'd use a library like multer or formidable to parse the file.
-  // 3. You'd upload the file buffer to Cloudinary, S3, etc.
-  // 4. The storage service would return a URL.
+  try {
+    const formData = await req.formData();
+    const file = formData.get('file') as File | null;
 
-  // For this example, we'll just return a placeholder URL.
-  const placeholderUrl = `https://res.cloudinary.com/demo/image/upload/v1625978437/sample.jpg`;
+    if (!file) {
+      return NextResponse.json({ message: 'No file uploaded.' }, { status: 400 });
+    }
 
-  return NextResponse.json({ imageUrl: placeholderUrl }, { status: 200 });
+    // Chuyển đổi tệp thành Buffer
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Tạo tên tệp duy nhất để tránh ghi đè
+    const filename = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
+
+    // Xác định đường dẫn đến thư mục public/uploads
+    // process.cwd() trỏ đến thư mục gốc của dự án
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+
+    // Đảm bảo thư mục upload tồn tại, tạo nếu chưa có
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    // Ghi tệp vào thư mục
+    const filePath = path.join(uploadDir, filename);
+    await fs.writeFile(filePath, buffer);
+
+    // Tạo URL công khai để truy cập tệp
+    const publicUrl = `/uploads/${filename}`;
+
+    // Trả về URL công khai trong response
+    return NextResponse.json({ imageUrl: publicUrl }, { status: 200 });
+
+  } catch (error) {
+    console.error('Upload error:', error);
+    return NextResponse.json({ message: 'An error occurred during file upload.' }, { status: 500 });
+  }
 }

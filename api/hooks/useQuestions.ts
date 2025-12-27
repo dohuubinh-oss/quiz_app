@@ -1,75 +1,57 @@
-"use client"
+"use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import {
-  getQuizQuestions,
-  createQuestion,
-  updateQuestion,
-  deleteQuestion,
-  reorderQuestions,
-} from "@/api/supabase/questions"
-import type { Question } from "@/lib/types"
-import { useAuth } from "@/lib/auth"
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
+import { IQuestion } from "@/models/Quiz";
 
-// Hook to fetch all questions for a quiz
-export const useQuizQuestions = (quizId: string, isPublicRoute = false) => {
-  const { user } = useAuth()
+// Không cần hook 'useQuizQuestions' nữa vì dữ liệu câu hỏi
+// đã được bao gồm trong hook 'useQuiz'. Điều này tránh việc gọi API hai lần.
 
-  return useQuery({
-    queryKey: ["questions", quizId],
-    queryFn: () => getQuizQuestions(quizId),
-    enabled: !!quizId && (!!user || isPublicRoute), // Enable if user is authenticated or it's a public route
-  })
-}
-
-// Hook to create a new question
-export const useCreateQuestion = () => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (question: Omit<Question, "id" | "created_at" | "updated_at">) => createQuestion(question),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["questions", data.quiz_id] })
-      queryClient.invalidateQueries({ queryKey: ["quiz", data.quiz_id] })
+// Hook để tạo một câu hỏi mới
+export const useCreateQuestion = (quizId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<IQuestion, Error, Omit<IQuestion, '_id'>>({
+    mutationFn: (newQuestion) => 
+      axios.post(`/api/quizzes/${quizId}/questions`, newQuestion).then(res => res.data.question),
+    onSuccess: () => {
+      // Làm mất hiệu lực query của quiz để nạp lại dữ liệu, bao gồm cả câu hỏi mới
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] });
     },
-  })
-}
+  });
+};
 
-// Hook to update a question
-export const useUpdateQuestion = () => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Question> }) => updateQuestion(id, updates),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["questions", data.quiz_id] })
-      queryClient.invalidateQueries({ queryKey: ["quiz", data.quiz_id] })
+// Hook để cập nhật một câu hỏi
+export const useUpdateQuestion = (quizId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation<IQuestion, Error, { questionId: string; updates: Partial<IQuestion> }>({ 
+    mutationFn: ({ questionId, updates }) =>
+      axios.put(`/api/quizzes/${quizId}/questions/${questionId}`, updates).then(res => res.data.question),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] });
     },
-  })
-}
+  });
+};
 
-// Hook to delete a question
+// Hook để xóa một câu hỏi
 export const useDeleteQuestion = (quizId: string) => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (id: string) => deleteQuestion(id),
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, string>({ // string ở đây là questionId
+    mutationFn: (questionId) => 
+      axios.delete(`/api/quizzes/${quizId}/questions/${questionId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["questions", quizId] })
-      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] });
     },
-  })
-}
+  });
+};
 
-// Hook to reorder questions
+// Hook để sắp xếp lại các câu hỏi
 export const useReorderQuestions = (quizId: string) => {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (questionIds: string[]) => reorderQuestions(quizId, questionIds),
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { questionIds: string[] }>({ // Chỉnh sửa kiểu dữ liệu ở đây
+    mutationFn: ({ questionIds }) => 
+      axios.put(`/api/quizzes/${quizId}/questions`, { questionIds }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["questions", quizId] })
-      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] })
+      queryClient.invalidateQueries({ queryKey: ["quiz", quizId] });
     },
-  })
-}
+  });
+};

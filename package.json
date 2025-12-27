@@ -19,6 +19,7 @@
     "@tanstack/react-query-devtools": "latest",
     "antd": "^6.1.1",
     "autoprefixer": "^10.4.20",
+    "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "mongoose": "^8.20.4",

@@ -1,45 +1,68 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  getQuizzes,
-  createQuiz,
-  updateQuiz,
-  deleteQuiz,
-  publishQuiz,
-  unpublishQuiz,
-} from "@/api/supabase/quizzes";
-import type { Quiz } from "@/lib/types";
-import { useAuth } from "@/lib/auth";
+import type { IQuiz } from "@/models/Quiz"; // Thay đổi: Import từ model MongoDB
+import axios from "axios"; // Sử dụng axios để gọi API
+
+// ---------- Bắt đầu các hàm gọi API mới ----------
+
+const fetchQuizzes = async (page: number, pageSize: number, searchTerm: string) => {
+  const { data } = await axios.get('/api/quizzes', {
+    params: {
+      page,
+      pageSize,
+      search: searchTerm,
+      // Thêm các tham số khác nếu API của bạn hỗ trợ, ví dụ: isPublished
+    },
+  });
+  return data;
+};
+
+const createNewQuiz = async (quiz: Partial<IQuiz>) => {
+  const { data } = await axios.post('/api/quizzes', quiz);
+  return data;
+};
+
+const updateExistingQuiz = async ({ id, updates }: { id: string; updates: Partial<IQuiz> }) => {
+  const { data } = await axios.put(`/api/quizzes/${id}`, updates);
+  return data;
+};
+
+const deleteExistingQuiz = async (id: string) => {
+  const { data } = await axios.delete(`/api/quizzes/${id}`);
+  return data;
+};
+
+// Hàm này có thể được xử lý bởi updateExistingQuiz bằng cách truyền { isPublished: boolean }
+const togglePublishStatus = async ({ id, isPublished }: { id: string; isPublished: boolean }) => {
+  const { data } = await axios.put(`/api/quizzes/${id}`, { isPublished });
+  return data;
+};
+
+// ---------- Kết thúc các hàm gọi API mới ----------
+
 
 // Hook to fetch all quizzes with pagination
 export const useQuizzes = (
   page = 1,
   pageSize = 9,
-  isPublicRoute = false,
   searchTerm: string
 ) => {
-  const { user } = useAuth();
-  console.log(searchTerm);
-
   return useQuery({
+    // Thay đổi: Cập nhật queryKey và queryFn
     queryKey: ["quizzes", page, pageSize, searchTerm],
-    queryFn: () => getQuizzes(page, pageSize, searchTerm),
-    enabled: !!user || isPublicRoute, // Only fetch if user is authenticated or it's a public route
+    queryFn: () => fetchQuizzes(page, pageSize, searchTerm),
+    // enabled không cần thiết vì API route sẽ xử lý logic của nó
   });
 };
 
 // Hook to create a new quiz
 export const useCreateQuiz = () => {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   return useMutation({
-    mutationFn: (quiz: Omit<Quiz, "id" | "created_at" | "updated_at">) =>
-      createQuiz({
-        ...quiz,
-        author_id: user?.id || "anonymous", // Add the current user's ID
-      }),
+    // Thay đổi: Sử dụng hàm gọi API mới
+    mutationFn: createNewQuiz,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["quizzes"] });
     },
@@ -51,11 +74,14 @@ export const useUpdateQuiz = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Quiz> }) =>
-      updateQuiz(id, updates),
+    // Thay đổi: Sử dụng hàm gọi API mới
+    mutationFn: updateExistingQuiz,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["quizzes"] });
-      queryClient.invalidateQueries({ queryKey: ["quiz", data.id] });
+      // Giả sử data trả về có id
+      if (data && data._id) {
+        queryClient.invalidateQueries({ queryKey: ["quiz", data._id] });
+      }
     },
   });
 };
@@ -65,23 +91,26 @@ export const useDeleteQuiz = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => deleteQuiz(id),
+    // Thay đổi: Sử dụng hàm gọi API mới
+    mutationFn: deleteExistingQuiz,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["quizzes"] });
     },
   });
 };
 
-// Hook to toggle publish status (publish or unpublish)
+// Hook to toggle publish status
 export const useTogglePublishQuiz = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, publish }: { id: string; publish: boolean }) =>
-      publish ? publishQuiz(id) : unpublishQuiz(id),
+    // Thay đổi: Sử dụng hàm gọi API mới
+    mutationFn: togglePublishStatus,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["quizzes"] });
-      queryClient.invalidateQueries({ queryKey: ["quiz", data.id] });
+       if (data && data._id) {
+        queryClient.invalidateQueries({ queryKey: ["quiz", data._id] });
+      }
     },
   });
 };

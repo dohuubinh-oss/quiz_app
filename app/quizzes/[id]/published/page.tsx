@@ -1,10 +1,9 @@
-"use client";
+'use client';
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { Typography, Button, Spin, Result, Card } from "antd";
 import { ArrowLeftOutlined, HomeOutlined } from "@ant-design/icons";
 import { useQuiz } from "@/api/hooks/useQuiz";
-import { useQuizQuestions } from "@/api/hooks/useQuestions";
 import QuizPreview from "@/components/quiz/QuizPreview";
 import Link from "next/link";
 import Image from "next/image";
@@ -13,14 +12,11 @@ const { Title, Paragraph } = Typography;
 
 export default function PublishedQuizPage() {
   const params = useParams();
-  const router = useRouter();
   const quizId = params.id as string;
 
-  const { data: quiz, isLoading: isLoadingQuiz } = useQuiz(quizId, true); // Pass true to indicate this is a public route
-  const { data: questions = [], isLoading: isLoadingQuestions } =
-    useQuizQuestions(quizId, true); // Pass true to indicate this is a public route
+  const { data: quiz, isLoading: isLoadingQuiz } = useQuiz(quizId);
 
-  if (isLoadingQuiz || isLoadingQuestions) {
+  if (isLoadingQuiz) {
     return (
       <div className="flex justify-center items-center h-64">
         <Spin size="large" />
@@ -47,7 +43,7 @@ export default function PublishedQuizPage() {
     );
   }
 
-  if (!quiz.published) {
+  if (!quiz.isPublished) {
     return (
       <div className="text-center">
         <Result
@@ -66,10 +62,11 @@ export default function PublishedQuizPage() {
     );
   }
 
+  const questions = quiz.questions || [];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
-        {/* Back Button */}
         <div className="mb-8">
           <Link href="/quizzes">
             <Button
@@ -82,12 +79,11 @@ export default function PublishedQuizPage() {
           </Link>
         </div>
 
-        {/* Hero Section */}
-        {quiz.cover_image ? (
+        {quiz.coverImage ? (
           <Card className="mb-8 shadow-xl border-0 rounded-3xl overflow-hidden bg-white">
             <div className="relative h-80 w-full">
               <Image
-                src={quiz.cover_image || "/placeholder.svg"}
+                src={quiz.coverImage || "/placeholder.svg"}
                 alt={quiz.title}
                 fill
                 className="object-cover"
@@ -106,7 +102,7 @@ export default function PublishedQuizPage() {
                   </Paragraph>
                   <div className="flex items-center space-x-4 text-white/80">
                     <span className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium">
-                      📅 {new Date(quiz.created_at).toLocaleDateString()}
+                      📅 {new Date(quiz.createdAt).toLocaleDateString()}
                     </span>
                     <span className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium">
                       ✨ Published Quiz
@@ -130,7 +126,7 @@ export default function PublishedQuizPage() {
               </Paragraph>
               <div className="flex items-center justify-center space-x-4 text-white/80">
                 <span className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium">
-                  📅 {new Date(quiz.created_at).toLocaleDateString()}
+                  📅 {new Date(quiz.createdAt).toLocaleDateString()}
                 </span>
                 <span className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium">
                   ✨ Published Quiz
@@ -140,7 +136,6 @@ export default function PublishedQuizPage() {
           </Card>
         )}
 
-        {/* Quiz Content */}
         <QuizPreview quiz={quiz} questions={questions} />
       </div>
     </div>
