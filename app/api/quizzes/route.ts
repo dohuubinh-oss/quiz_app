@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import dbConnect from '@/lib/mongodb';
 import { Quiz } from '@/models/Quiz';
-import { IQuiz } from '@/models/Quiz';
+import mongoose from 'mongoose'; // **Thêm import mongoose**
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -15,18 +15,25 @@ export async function POST(req: NextRequest) {
 
   try {
     await dbConnect();
-    const body: IQuiz = await req.json();
+    const body = await req.json();
 
-    const { title, description, coverImage, questions } = body;
+    const { title, description, coverImage } = body;
 
-    if (!title || !description || !coverImage || !questions) {
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    if (!title || !description || !coverImage) {
+      return NextResponse.json({ message: 'Title, description, and a cover image are required' }, { status: 400 });
     }
 
-    const newQuiz = new Quiz({
-      ...body,
-      authorId: session.user.id,
-    });
+    const newQuizData = {
+      title,
+      description,
+      coverImage,
+      questions: [],
+      published: false,
+      // **Chuyển đổi session.user.id sang ObjectId**
+      authorId: new mongoose.Types.ObjectId(session.user.id),
+    };
+
+    const newQuiz = new Quiz(newQuizData);
 
     await newQuiz.save();
 
@@ -34,7 +41,11 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('Error creating quiz:', error);
-    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+    // Cung cấp thông báo lỗi chi tiết hơn trong môi trường development
+    const errorMessage = process.env.NODE_ENV === 'development' 
+      ? (error as Error).message 
+      : 'Internal Server Error';
+    return NextResponse.json({ message: errorMessage }, { status: 500 });
   }
 }
 
@@ -42,7 +53,7 @@ export async function GET() {
   try {
     await dbConnect();
 
-    const quizzes = await Quiz.find({}).sort({ _id: -1 }); // Get all quizzes, sort by newest
+    const quizzes = await Quiz.find({}).sort({ _id: -1 });
 
     return NextResponse.json(quizzes, { status: 200 });
 

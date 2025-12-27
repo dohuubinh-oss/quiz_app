@@ -1,81 +1,117 @@
-"use client";
+'use client';
 
-import type React from "react";
-import { useState, useEffect } from "react";
-import { Form, Input, Select, Button, Card, Typography, Radio } from "antd";
-import { useForm, Controller } from "react-hook-form";
-import type { Question } from "@/lib/types";
+import type React from 'react';
+import { useState, useEffect } from 'react';
+import { Form, Input, Select, Button, Card, Typography, Radio } from 'antd';
+import { useForm, Controller } from 'react-hook-form';
+// Giữ nguyên kiểu IQuestion từ model để đảm bảo tính nhất quán
+import type { IQuestion } from '@/models/Quiz';
 
 const { Title, Paragraph } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 
+// Định nghĩa lại props để nhận đúng kiểu dữ liệu từ server
 interface QuestionFormProps {
-  initialData?: Question;
+  initialData?: IQuestion;
   onSubmit: (data: any) => void;
   onCancel: () => void;
 }
+
+// Hàm "phiên dịch" dữ liệu từ server (IQuestion) sang định dạng cho Form
+const transformDataForForm = (question?: IQuestion) => {
+  if (!question) {
+    return {
+      question_text: '',
+      // Mặc định là 4 lựa chọn, giữ nguyên logic cũ của form
+      question_type: 'four_choices',
+      option_a: '',
+      option_b: '',
+      option_c: '',
+      option_d: '',
+      correct_answer: '',
+    };
+  }
+
+  const correctIndex = question.options.findIndex(opt => opt.isCorrect);
+  const correctLetter = ['a', 'b', 'c', 'd'][correctIndex];
+
+  return {
+    question_text: question.questionText,
+    question_type: question.options.length <= 2 ? 'two_choices' : 'four_choices',
+    option_a: question.options[0]?.optionText || '',
+    option_b: question.options[1]?.optionText || '',
+    option_c: question.options[2]?.optionText || '',
+    option_d: question.options[3]?.optionText || '',
+    correct_answer: correctLetter || '',
+  };
+};
 
 const QuestionForm: React.FC<QuestionFormProps> = ({
   initialData,
   onSubmit,
   onCancel,
 }) => {
+  // Sử dụng hàm "phiên dịch" để tạo giá trị mặc định
+  const formDefaultValues = transformDataForForm(initialData);
+
   const {
     control,
     handleSubmit,
     watch,
     setValue,
+    reset, // Thêm reset từ react-hook-form
     formState: { errors },
   } = useForm({
-    defaultValues: {
-      question_text: initialData?.question_text || "",
-      question_type: initialData?.question_type || "four_choices",
-      option_a: initialData?.options?.a || "",
-      option_b: initialData?.options?.b || "",
-      option_c: initialData?.options?.c || "",
-      option_d: initialData?.options?.d || "",
-      correct_answer: initialData?.correct_answer || "",
-    },
+    defaultValues: formDefaultValues,
   });
 
-  const questionType = watch("question_type");
+  const questionType = watch('question_type');
   const [correctAnswer, setCorrectAnswer] = useState(
-    initialData?.correct_answer || ""
+    formDefaultValues.correct_answer
   );
 
+  // useEffect để cập nhật form khi initialData thay đổi (khi người dùng click edit)
   useEffect(() => {
-    setValue("correct_answer", correctAnswer);
+    const newDefaultValues = transformDataForForm(initialData);
+    reset(newDefaultValues); // Dùng reset để cập nhật toàn bộ form
+    setCorrectAnswer(newDefaultValues.correct_answer);
+  }, [initialData, reset]);
+
+  useEffect(() => {
+    setValue('correct_answer', correctAnswer);
   }, [correctAnswer, setValue]);
 
+  // Sửa lại hàm submit để "phiên dịch" dữ liệu cho API
   const handleFormSubmit = (data: any) => {
-    const options: Record<string, string> = {};
-
-    if (questionType === "two_choices") {
-      options.a = data.option_a;
-      options.b = data.option_b;
-    } else if (questionType === "four_choices") {
-      options.a = data.option_a;
-      options.b = data.option_b;
-      options.c = data.option_c;
-      options.d = data.option_d;
+    const optionsArray: string[] = [];
+    if (data.option_a) optionsArray.push(data.option_a);
+    if (data.option_b) optionsArray.push(data.option_b);
+    // Chỉ thêm option c và d nếu là loại 4 lựa chọn
+    if (questionType === 'four_choices') {
+        if (data.option_c) optionsArray.push(data.option_c);
+        if (data.option_d) optionsArray.push(data.option_d);
     }
 
-    const formattedData = {
-      question_text: data.question_text,
-      question_type: data.question_type,
-      options: options,
-      correct_answer: data.correct_answer,
-    };
+    const correctOptionMap: { [key: string]: number } = { a: 0, b: 1, c: 2, d: 3 };
+    const correctIndex = correctOptionMap[data.correct_answer];
 
-    onSubmit(formattedData);
+    const formattedDataForApi = {
+      questionText: data.question_text,
+      options: optionsArray,
+      correctOptionIndex: correctIndex,
+    };
+    
+    // Gửi đi dữ liệu đã được định dạng đúng
+    onSubmit(formattedDataForApi);
   };
 
+  // --- TOÀN BỘ PHẦN JSX VÀ CLASSNAME BÊN DƯỚI ĐƯỢC GIỮ NGUYÊN 100% ---
   return (
     <Card className="shadow-xl border-0 rounded-3xl overflow-hidden bg-white animate-fade-in-up">
       <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-8 border-b border-gray-100">
         <Title level={3} className="mb-3 text-gray-800">
-          {initialData ? "✏️ Edit Question" : "➕ Add New Question"}
+          {initialData ? '✏️ Edit Question' : '➕ Add New Question'}
         </Title>
         <Paragraph className="text-gray-600 mb-0 text-lg">
           Create engaging questions for your quiz
@@ -89,7 +125,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
             <Controller
               name="question_text"
               control={control}
-              rules={{ required: "Question text is required" }}
+              rules={{ required: 'Question text is required' }}
               render={({ field, fieldState }) => (
                 <Form.Item
                   label={
@@ -97,7 +133,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                       📝 Question Text
                     </span>
                   }
-                  validateStatus={fieldState.error ? "error" : ""}
+                  validateStatus={fieldState.error ? 'error' : ''}
                   help={fieldState.error?.message}
                 >
                   <TextArea
@@ -114,7 +150,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
             <Controller
               name="question_type"
               control={control}
-              rules={{ required: "Question type is required" }}
+              rules={{ required: 'Question type is required' }}
               render={({ field, fieldState }) => (
                 <Form.Item
                   label={
@@ -122,7 +158,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                       🎯 Question Type
                     </span>
                   }
-                  validateStatus={fieldState.error ? "error" : ""}
+                  validateStatus={fieldState.error ? 'error' : ''}
                   help={fieldState.error?.message}
                 >
                   <Select
@@ -130,9 +166,9 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                     placeholder="Select question type"
                     size="large"
                     className="rounded-2xl"
-                    onChange={(value) => {
+                    onChange={value => {
                       field.onChange(value);
-                      setCorrectAnswer("");
+                      setCorrectAnswer('');
                     }}
                   >
                     <Option value="two_choices">
@@ -151,6 +187,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                         </span>
                       </div>
                     </Option>
+                    {/* Loại input không được hỗ trợ bởi model hiện tại, giữ nguyên trong UI nhưng logic submit sẽ bỏ qua */}
                     <Option value="input">
                       <div className="flex items-center space-x-3 py-2">
                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -163,8 +200,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
             />
 
             {/* Answer Options */}
-            {(questionType === "two_choices" ||
-              questionType === "four_choices") && (
+            {(questionType === 'two_choices' ||
+              questionType === 'four_choices') && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
                   <Title level={4} className="mb-0 text-gray-700">
@@ -180,17 +217,17 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                   <Controller
                     name="option_a"
                     control={control}
-                    rules={{ required: "Option A is required" }}
+                    rules={{ required: 'Option A is required' }}
                     render={({ field, fieldState }) => (
                       <Form.Item
-                        validateStatus={fieldState.error ? "error" : ""}
+                        validateStatus={fieldState.error ? 'error' : ''}
                         help={fieldState.error?.message}
                       >
                         <div className="space-y-3">
                           <div className="flex items-center space-x-3">
                             <Radio
-                              checked={correctAnswer === "a"}
-                              onChange={() => setCorrectAnswer("a")}
+                              checked={correctAnswer === 'a'}
+                              onChange={() => setCorrectAnswer('a')}
                               className="text-lg"
                             />
                             <span className="font-semibold text-gray-700">
@@ -212,17 +249,17 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                   <Controller
                     name="option_b"
                     control={control}
-                    rules={{ required: "Option B is required" }}
+                    rules={{ required: 'Option B is required' }}
                     render={({ field, fieldState }) => (
                       <Form.Item
-                        validateStatus={fieldState.error ? "error" : ""}
+                        validateStatus={fieldState.error ? 'error' : ''}
                         help={fieldState.error?.message}
                       >
                         <div className="space-y-3">
                           <div className="flex items-center space-x-3">
                             <Radio
-                              checked={correctAnswer === "b"}
-                              onChange={() => setCorrectAnswer("b")}
+                              checked={correctAnswer === 'b'}
+                              onChange={() => setCorrectAnswer('b')}
                               className="text-lg"
                             />
                             <span className="font-semibold text-gray-700">
@@ -241,21 +278,21 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                   />
 
                   {/* Option C - Only for four choices */}
-                  {questionType === "four_choices" && (
+                  {questionType === 'four_choices' && (
                     <Controller
                       name="option_c"
                       control={control}
-                      rules={{ required: "Option C is required" }}
+                      rules={{ required: 'Option C is required' }}
                       render={({ field, fieldState }) => (
                         <Form.Item
-                          validateStatus={fieldState.error ? "error" : ""}
+                          validateStatus={fieldState.error ? 'error' : ''}
                           help={fieldState.error?.message}
                         >
                           <div className="space-y-3">
                             <div className="flex items-center space-x-3">
                               <Radio
-                                checked={correctAnswer === "c"}
-                                onChange={() => setCorrectAnswer("c")}
+                                checked={correctAnswer === 'c'}
+                                onChange={() => setCorrectAnswer('c')}
                                 className="text-lg"
                               />
                               <span className="font-semibold text-gray-700">
@@ -275,21 +312,21 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                   )}
 
                   {/* Option D - Only for four choices */}
-                  {questionType === "four_choices" && (
+                  {questionType === 'four_choices' && (
                     <Controller
                       name="option_d"
                       control={control}
-                      rules={{ required: "Option D is required" }}
+                      rules={{ required: 'Option D is required' }}
                       render={({ field, fieldState }) => (
                         <Form.Item
-                          validateStatus={fieldState.error ? "error" : ""}
+                          validateStatus={fieldState.error ? 'error' : ''}
                           help={fieldState.error?.message}
                         >
                           <div className="space-y-3">
                             <div className="flex items-center space-x-3">
                               <Radio
-                                checked={correctAnswer === "d"}
-                                onChange={() => setCorrectAnswer("d")}
+                                checked={correctAnswer === 'd'}
+                                onChange={() => setCorrectAnswer('d')}
                                 className="text-lg"
                               />
                               <span className="font-semibold text-gray-700">
@@ -313,10 +350,10 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                 <Controller
                   name="correct_answer"
                   control={control}
-                  rules={{ required: "Please select the correct answer" }}
+                  rules={{ required: 'Please select the correct answer' }}
                   render={({ fieldState }) => (
                     <Form.Item
-                      validateStatus={fieldState.error ? "error" : ""}
+                      validateStatus={fieldState.error ? 'error' : ''}
                       help={fieldState.error?.message}
                     >
                       <input type="hidden" value={correctAnswer} />
@@ -327,13 +364,13 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
             )}
 
             {/* Text Input Answer */}
-            {questionType === "input" && (
+            {questionType === 'input' && (
               <Controller
                 name="correct_answer"
                 control={control}
                 rules={{
                   required:
-                    "Correct answer is required for text input questions",
+                    'Correct answer is required for text input questions',
                 }}
                 render={({ field, fieldState }) => (
                   <Form.Item
@@ -342,7 +379,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                         ✅ Correct Answer
                       </span>
                     }
-                    validateStatus={fieldState.error ? "error" : ""}
+                    validateStatus={fieldState.error ? 'error' : ''}
                     help={fieldState.error?.message}
                   >
                     <Input
@@ -372,7 +409,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
               size="large"
               className="h-12 px-8 bg-gradient-to-r from-blue-500 to-purple-600 border-0 hover:shadow-xl hover:scale-105 transition-all duration-300 rounded-xl font-medium"
             >
-              {initialData ? "✏️ Update Question" : "➕ Add Question"}
+              {initialData ? '✏️ Update Question' : '➕ Add Question'}
             </Button>
           </div>
         </Form>

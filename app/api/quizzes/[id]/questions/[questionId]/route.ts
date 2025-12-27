@@ -19,7 +19,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string, 
   }
 
   try {
-    const body = await req.json();
+    // Lấy dữ liệu mới từ body
+    const { questionText, options, correctOptionIndex } = await req.json();
+
+    // **SỬA LỖI: Thêm xác thực đầu vào tương tự như API tạo mới**
+    if (!questionText || !options || !Array.isArray(options) || options.length < 2 || correctOptionIndex === undefined) {
+      return NextResponse.json({ message: 'Missing or invalid required question fields' }, { status: 400 });
+    }
 
     await dbConnect();
     const quiz = await Quiz.findById(id);
@@ -36,13 +42,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string, 
       return NextResponse.json({ message: 'Question not found' }, { status: 404 });
     }
 
-    // Cập nhật các trường
-    question.text = body.text ?? question.text;
-    question.options = body.options ?? question.options;
-    question.correctOption = body.correctOption ?? question.correctOption;
+    // **SỬA LỖI: Biến đổi dữ liệu đầu vào và cập nhật câu hỏi**
+    const formattedOptions = options.map((optionText: string, index: number) => ({
+      optionText,
+      isCorrect: index === correctOptionIndex,
+    }));
+
+    question.questionText = questionText;
+    question.options = formattedOptions;
     
     await quiz.save();
     
+    // Trả về câu hỏi đã được cập nhật
     return NextResponse.json({ message: 'Question updated successfully', question }, { status: 200 });
 
   } catch (error) {
@@ -76,10 +87,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
         const question = quiz.questions.id(questionId);
         if (!question) {
-            // Nếu câu hỏi không tồn tại, coi như đã xóa thành công
             return NextResponse.json({ message: 'Question already deleted or not found' }, { status: 200 });
         }
 
+        // Sử dụng Mongoose để xóa sub-document
         question.deleteOne();
 
         await quiz.save();

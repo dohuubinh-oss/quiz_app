@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/options';
 import dbConnect from '@/lib/mongodb';
-import Quiz from '@/models/Quiz';
+import { Quiz } from '@/models/Quiz';
 import mongoose from 'mongoose';
 
 // POST: Tạo một câu hỏi mới cho một quiz
@@ -20,10 +20,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const body = await req.json();
-    const { text, options, correctOption } = body;
+    // Đổi tên `text` thành `questionText` để rõ ràng hơn
+    const { questionText, options, correctOptionIndex } = body;
 
-    // Xác thực đầu vào cơ bản
-    if (!text || !options || !Array.isArray(options) || options.length < 2 || correctOption === undefined) {
+    // Xác thực đầu vào
+    if (!questionText || !options || !Array.isArray(options) || options.length < 2 || correctOptionIndex === undefined) {
       return NextResponse.json({ message: 'Missing or invalid required question fields' }, { status: 400 });
     }
 
@@ -33,22 +34,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ message: 'Quiz not found' }, { status: 404 });
     }
 
-    // Kiểm tra quyền sở hữu
     if (quiz.authorId.toString() !== session.user.id) {
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
 
+    // **SỬA LỖI: Biến đổi `options` và `correctOptionIndex` thành cấu trúc đúng theo Schema**
+    const formattedOptions = options.map((optionText: string, index: number) => ({
+      optionText,
+      isCorrect: index === correctOptionIndex,
+    }));
+
     const newQuestion = {
-      _id: new mongoose.Types.ObjectId(), // Tạo ID mới cho sub-document
-      text,
-      options,
-      correctOption,
+      _id: new mongoose.Types.ObjectId(),
+      questionText, // Sử dụng tên trường đúng
+      options: formattedOptions, // Sử dụng mảng đã được định dạng
     };
 
-    quiz.questions.push(newQuestion);
+    quiz.questions.push(newQuestion as any);
     await quiz.save();
     
-    // Câu hỏi vừa được tạo là phần tử cuối cùng trong mảng
     const createdQuestion = quiz.questions[quiz.questions.length - 1];
     return NextResponse.json({ message: 'Question added successfully', question: createdQuestion }, { status: 201 });
 
@@ -94,7 +98,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
              return NextResponse.json({ message: 'Question list mismatch' }, { status: 400 });
         }
 
-        quiz.questions = reorderedQuestions as any; // Ghi đè mảng cũ bằng mảng đã sắp xếp lại
+        quiz.questions = reorderedQuestions as any;
         await quiz.save();
         
         return NextResponse.json({ message: 'Questions reordered successfully' }, { status: 200 });

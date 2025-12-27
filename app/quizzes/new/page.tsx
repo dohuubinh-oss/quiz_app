@@ -9,13 +9,13 @@ import {
   Form,
   Input,
   Card,
-  message,
   Upload,
   Modal,
+  App,
 } from "antd";
 import { useCreateQuiz } from "@/api/hooks/useQuizzes";
 import { useAuth } from "@/lib/auth";
-import { InboxOutlined, PlusOutlined } from "@ant-design/icons";
+import { InboxOutlined } from "@ant-design/icons";
 import { uploadCoverImage } from "@/lib/storage";
 import Image from "next/image";
 
@@ -23,57 +23,59 @@ const { Title } = Typography;
 const { TextArea } = Input;
 const { Dragger } = Upload;
 
-export default function NewQuizPage() {
+function NewQuizPageContent() {
   const router = useRouter();
+  const { message } = App.useApp();
   const createQuizMutation = useCreateQuiz();
   const { user } = useAuth();
   const [form] = Form.useForm();
-  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const handleCreateQuiz = async (values: any) => {
+    if (!coverImageFile) {
+      message.error("A cover image is required.");
+      return;
+    }
+
     try {
-        if (!user) {
-            message.error("You must be logged in to create a quiz.");
-            return;
-        }
+      if (!user) {
+        message.error("You must be logged in to create a quiz.");
+        return;
+      }
 
-        setUploading(true);
-        let coverImageUrl = null;
+      setUploading(true);
 
-        // Tải ảnh bìa lên nếu có
-        if (coverImage) {
-            coverImageUrl = await uploadCoverImage(coverImage);
-            if (!coverImageUrl) {
-                message.error("Failed to upload cover image");
-                setUploading(false);
-                return;
-            }
-        }
-
-        const newQuiz = await createQuizMutation.mutateAsync({
-            title: values.title,
-            description: values.description,
-            published: false,
-            cover_image: coverImageUrl, // Lưu URL của ảnh đã tải lên
-            author_id: user.id,
-        });
-
-        message.success("Quiz created successfully");
-        router.push(`/quizzes/${newQuiz.id}`);
-    } catch (error) {
-        message.error("Failed to create quiz");
+      const coverImageUrl = await uploadCoverImage(coverImageFile);
+      if (!coverImageUrl) {
+        message.error("Failed to upload cover image");
         setUploading(false);
+        return;
+      }
+
+      // **LOẠI BỎ author_id: user.id**
+      // Server sẽ tự động xử lý việc này
+      const newQuiz = await createQuizMutation.mutateAsync({
+        title: values.title,
+        description: values.description,
+        published: false,
+        coverImage: coverImageUrl,
+      });
+
+      message.success("Quiz created successfully");
+      router.push(`/quizzes/${newQuiz.id}`);
+    } catch (error) {
+      message.error("Failed to create quiz");
+      setUploading(false);
     }
   };
 
   const handleImageChange = (info: any) => {
     const file = info.file.originFileObj || info.file;
-    setCoverImage(file);
+    setCoverImageFile(file);
 
-    // Tạo URL xem trước
     const reader = new FileReader();
     reader.onload = () => {
       setPreviewImage(reader.result as string);
@@ -94,7 +96,7 @@ export default function NewQuizPage() {
       if (!isLt2M) {
         message.error("Image must be smaller than 2MB!");
       }
-      return false; // Luôn trả về false để xử lý tải lên thủ công
+      return false; // Prevent automatic upload
     },
     onChange: handleImageChange,
   };
@@ -123,7 +125,7 @@ export default function NewQuizPage() {
             <TextArea rows={4} placeholder="Quiz description" />
           </Form.Item>
 
-          <Form.Item label="Cover Image">
+          <Form.Item label="Cover Image" required>
             {previewImage ? (
               <div className="relative">
                 <div
@@ -139,7 +141,7 @@ export default function NewQuizPage() {
                 </div>
                 <Button
                   onClick={() => {
-                    setCoverImage(null);
+                    setCoverImageFile(null);
                     setPreviewImage(null);
                   }}
                 >
@@ -185,5 +187,13 @@ export default function NewQuizPage() {
         )}
       </Modal>
     </div>
+  );
+}
+
+export default function NewQuizPage() {
+  return (
+    <App>
+      <NewQuizPageContent />
+    </App>
   );
 }

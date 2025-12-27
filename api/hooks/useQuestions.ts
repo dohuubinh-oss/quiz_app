@@ -4,17 +4,23 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { IQuestion } from "@/models/Quiz";
 
-// Không cần hook 'useQuizQuestions' nữa vì dữ liệu câu hỏi
-// đã được bao gồm trong hook 'useQuiz'. Điều này tránh việc gọi API hai lần.
+// Định nghĩa kiểu dữ liệu cho việc tạo mới một câu hỏi.
+// Cấu trúc này khớp với những gì API route mong đợi.
+interface CreateQuestionInput {
+  questionText: string;
+  options: string[];
+  correctOptionIndex: number;
+}
 
 // Hook để tạo một câu hỏi mới
 export const useCreateQuestion = (quizId: string) => {
   const queryClient = useQueryClient();
-  return useMutation<IQuestion, Error, Omit<IQuestion, '_id'>>({
-    mutationFn: (newQuestion) => 
-      axios.post(`/api/quizzes/${quizId}/questions`, newQuestion).then(res => res.data.question),
+  // Cập nhật mutation để sử dụng kiểu dữ liệu đầu vào mới
+  return useMutation<IQuestion, Error, CreateQuestionInput>({
+    mutationFn: (newQuestionData) => 
+      axios.post(`/api/quizzes/${quizId}/questions`, newQuestionData).then(res => res.data.question),
     onSuccess: () => {
-      // Làm mất hiệu lực query của quiz để nạp lại dữ liệu, bao gồm cả câu hỏi mới
+      // Làm mới lại query của quiz để nạp lại dữ liệu, bao gồm cả câu hỏi mới
       queryClient.invalidateQueries({ queryKey: ["quiz", quizId] });
     },
   });
@@ -47,7 +53,7 @@ export const useDeleteQuestion = (quizId: string) => {
 // Hook để sắp xếp lại các câu hỏi
 export const useReorderQuestions = (quizId: string) => {
   const queryClient = useQueryClient();
-  return useMutation<void, Error, { questionIds: string[] }>({ // Chỉnh sửa kiểu dữ liệu ở đây
+  return useMutation<void, Error, { questionIds: string[] }>({ 
     mutationFn: ({ questionIds }) => 
       axios.put(`/api/quizzes/${quizId}/questions`, { questionIds }),
     onSuccess: () => {

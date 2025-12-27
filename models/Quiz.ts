@@ -1,31 +1,39 @@
-import mongoose, { Schema, Document } from 'mongoose';
 
-export interface IQuiz extends Document {
-  title: string;
-  description: string;
-  coverImage: string;
-  authorId: string;
-  questions: IQuestion[];
-}
+import { Document, Schema, model, models } from 'mongoose';
 
 export interface IQuestion {
-  questionText: string;
-  options: string[];
-  correctAnswer: number;
+    questionText: string;
+    options: { optionText: string; isCorrect: boolean; }[];
 }
 
-const QuestionSchema: Schema = new Schema({
-  questionText: { type: String, required: true },
-  options: [{ type: String, required: true }],
-  correctAnswer: { type: Number, required: true },
+export interface IQuiz extends Document {
+    title: string;
+    description: string;
+    // Sử dụng camelCase cho coverImage
+    coverImage: string; 
+    questions: IQuestion[];
+    // Sử dụng camelCase cho authorId
+    authorId: Schema.Types.ObjectId;
+    published: boolean;
+}
+
+const QuestionSchema = new Schema<IQuestion>({
+    questionText: { type: String, required: true },
+    options: [{
+        optionText: { type: String, required: true },
+        isCorrect: { type: Boolean, required: true, default: false },
+    }],
 });
 
-const QuizSchema: Schema = new Schema({
-  title: { type: String, required: true },
-  description: { type: String, required: true },
-  coverImage: { type: String, required: true },
-  authorId: { type: String, required: true },
-  questions: [QuestionSchema],
-});
+const QuizSchema = new Schema<IQuiz>({
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    // Cập nhật ở đây
+    coverImage: { type: String, required: false }, 
+    questions: [QuestionSchema],
+    // Cập nhật ở đây
+    authorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    published: { type: Boolean, default: false },
+}, { timestamps: true });
 
-export const Quiz = mongoose.models.Quiz || mongoose.model<IQuiz>('Quiz', QuizSchema);
+export const Quiz = models.Quiz || model<IQuiz>('Quiz', QuizSchema);
